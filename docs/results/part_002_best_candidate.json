@@ -1,0 +1,20 @@
+{
+  "candidate_stl":"outputs\/part_002\/candidate_1.stl",
+  "vertices":369,
+  "faces":734,
+  "watertight":true,
+  "bbox_x":42.5969467163,
+  "bbox_y":40.0,
+  "bbox_z":3.0,
+  "gt_bbox_x":60.0,
+  "gt_bbox_y":35.0,
+  "gt_bbox_z":38.0,
+  "bbox_x_error":0.2900508881,
+  "bbox_y_error":0.1428571429,
+  "bbox_z_error":0.9210526316,
+  "volume":1963.8655197598,
+  "gt_volume":28828.8981410289,
+  "volume_error":0.9318785786,
+  "bbox_mean_error":0.4513202208,
+  "watertight_score":0
+}

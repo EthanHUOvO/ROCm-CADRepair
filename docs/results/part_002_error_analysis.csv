@@ -1,0 +1,7 @@
+log,candidate,safe_mode,success,error_type
+verify_candidate_0.json,0,False,True,
+verify_candidate_1.json,1,False,True,
+verify_candidate_2.json,2,False,False,OCP.OCP.StdFail.StdFail_NotDone
+verify_candidate_2_safe.json,2,True,True,
+verify_candidate_3.json,3,False,True,
+verify_candidate_4.json,4,False,True,

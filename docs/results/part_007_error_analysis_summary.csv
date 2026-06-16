@@ -1,0 +1,5 @@
+safe_mode,error_type,count
+False,OCP.OCP.Standard.Standard_OutOfRange,1
+False,ValueError,1
+True,OCP.OCP.Standard.Standard_OutOfRange,1
+True,ValueError,1

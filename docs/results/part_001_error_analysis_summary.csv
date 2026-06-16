@@ -1,0 +1,4 @@
+safe_mode,error_type,count
+False,OCP.OCP.Standard.Standard_Failure,1
+False,OCP.OCP.StdFail.StdFail_NotDone,1
+True,ValueError,2

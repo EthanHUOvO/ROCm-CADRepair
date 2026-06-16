@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Python environments
+venv/
+env/
+z2cad_env/
+.venv/
+
+# Model weights
+models/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Large outputs
+outputs/
+logs/
+*.log
+
+# Cache
+.cache/
+huggingface/
+hf_cache/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

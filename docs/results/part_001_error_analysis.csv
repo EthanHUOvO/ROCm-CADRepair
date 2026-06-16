@@ -1,0 +1,8 @@
+log,candidate,safe_mode,success,error_type
+verify_candidate_0.json,0,False,False,OCP.OCP.Standard.Standard_Failure
+verify_candidate_0_safe.json,0,True,False,ValueError
+verify_candidate_1.json,1,False,True,
+verify_candidate_2.json,2,False,True,
+verify_candidate_3.json,3,False,False,OCP.OCP.StdFail.StdFail_NotDone
+verify_candidate_3_safe.json,3,True,False,ValueError
+verify_candidate_4.json,4,False,True,

@@ -1,0 +1,6 @@
+candidate,final_success,selected_stage,step_path,stl_path,raw_error_type,safe_error_type
+0,True,raw,outputs/part_005/candidate_0.step,outputs/part_005/candidate_0.stl,,
+1,True,safe,outputs/part_005/candidate_1.step,outputs/part_005/candidate_1.stl,OCP.OCP.StdFail.StdFail_NotDone,
+2,True,safe,outputs/part_005/candidate_2.step,outputs/part_005/candidate_2.stl,OCP.OCP.Standard.Standard_ConstructionError,
+3,False,failed,,,OCP.OCP.StdFail.StdFail_NotDone,ValueError
+4,True,raw,outputs/part_005/candidate_4.step,outputs/part_005/candidate_4.stl,,
