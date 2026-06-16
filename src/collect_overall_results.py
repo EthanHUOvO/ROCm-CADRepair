@@ -7,6 +7,7 @@ for part_dir in sorted(Path("./outputs").glob("part_*")):
     p = part_dir.name
     pipeline = part_dir / "pipeline_summary.csv"
     geom = part_dir / "geometry_eval.csv"
+    chamfer = part_dir / "chamfer_eval.csv"
 
     row = {
         "sample": p,
@@ -18,6 +19,7 @@ for part_dir in sorted(Path("./outputs").glob("part_*")):
         "failed": None,
         "best_bbox_mean_error": None,
         "best_volume_error": None,
+        "best_normalized_chamfer_l2_squared": None,
     }
 
     if pipeline.exists():
@@ -56,6 +58,13 @@ for part_dir in sorted(Path("./outputs").glob("part_*")):
 
             row["best_bbox_mean_error"] = best.get("bbox_mean_error")
             row["best_volume_error"] = best.get("volume_error", None)
+
+    if chamfer.exists():
+        c = pd.read_csv(chamfer)
+        if len(c) > 0 and "normalized_chamfer_l2_squared" in c.columns:
+            row["best_normalized_chamfer_l2_squared"] = c[
+                "normalized_chamfer_l2_squared"
+            ].min()
 
     rows.append(row)
 

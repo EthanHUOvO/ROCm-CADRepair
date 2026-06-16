@@ -1,0 +1,8 @@
+pandas
+pillow
+transformers
+accelerate
+huggingface_hub
+trimesh
+cadquery
+matplotlib

@@ -5,6 +5,8 @@ import cadquery as cq
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+from render_views_from_stl import render_views
+
 
 def export_part(result, part_dir: Path, name: str):
     part_dir.mkdir(parents=True, exist_ok=True)
@@ -264,7 +266,7 @@ def main():
         part_dir = root / name
         result = fn()
         export_part(result, part_dir, name)
-        render_schematic(name, part_dir)
+        render_views(part_dir / f"{name}_gt.stl", part_dir / "views")
         print("Saved:", part_dir)
 
     print("All benchmark parts created.")
