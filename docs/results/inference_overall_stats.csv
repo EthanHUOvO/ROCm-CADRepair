@@ -1,0 +1,2 @@
+num_inferences,avg_inference_time_sec,min_inference_time_sec,max_inference_time_sec,avg_peak_vram_gb,max_peak_vram_gb
+40,19.457233095169066,3.791560173034668,147.2586064338684,4.488603591918945,4.488603591918945

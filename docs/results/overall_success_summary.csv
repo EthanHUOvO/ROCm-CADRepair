@@ -1,0 +1,2 @@
+total_candidates,total_raw_success,total_safe_success,total_pipeline_success,total_failed,raw_success_rate,pipeline_success_rate,absolute_gain
+40,27,6,33,7,0.675,0.825,0.1499999999999999

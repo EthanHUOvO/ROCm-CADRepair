@@ -1,0 +1,6 @@
+error_type,count
+ValueError,8
+OCP.OCP.StdFail.StdFail_NotDone,6
+OCP.OCP.Standard.Standard_Failure,3
+OCP.OCP.Standard.Standard_OutOfRange,2
+OCP.OCP.Standard.Standard_ConstructionError,1
