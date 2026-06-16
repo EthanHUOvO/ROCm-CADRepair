@@ -16,7 +16,20 @@ if not rows:
 
 df = pd.DataFrame(rows)
 
-cols = ["sample", "candidate", "inference_time_sec", "peak_vram_gb", "max_new_tokens", "temperature"]
+cols = [
+    "sample",
+    "candidate",
+    "profile_label",
+    "inference_time_sec",
+    "generated_tokens",
+    "generated_tokens_per_sec",
+    "peak_vram_gb",
+    "peak_reserved_vram_gb",
+    "max_new_tokens",
+    "temperature",
+    "gpu_name",
+    "torch_hip_version",
+]
 print(df[cols if all(c in df.columns for c in cols) else df.columns])
 
 overall = {
@@ -28,11 +41,28 @@ overall = {
     "max_peak_vram_gb": df["peak_vram_gb"].max(),
 }
 
+if "generated_tokens_per_sec" in df.columns:
+    overall["avg_generated_tokens_per_sec"] = df["generated_tokens_per_sec"].mean()
+    overall["max_generated_tokens_per_sec"] = df["generated_tokens_per_sec"].max()
+
+if "peak_reserved_vram_gb" in df.columns:
+    overall["avg_peak_reserved_vram_gb"] = df["peak_reserved_vram_gb"].mean()
+    overall["max_peak_reserved_vram_gb"] = df["peak_reserved_vram_gb"].max()
+
 by_part = df.groupby("sample").agg(
     num_inferences=("candidate", "count"),
     avg_inference_time_sec=("inference_time_sec", "mean"),
     avg_peak_vram_gb=("peak_vram_gb", "mean"),
 ).reset_index()
+
+if "generated_tokens_per_sec" in df.columns:
+    by_part = by_part.merge(
+        df.groupby("sample").agg(
+            avg_generated_tokens_per_sec=("generated_tokens_per_sec", "mean"),
+        ).reset_index(),
+        on="sample",
+        how="left",
+    )
 
 print("\nOverall inference stats:")
 for k, v in overall.items():

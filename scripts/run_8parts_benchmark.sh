@@ -5,6 +5,8 @@ MODEL=${MODEL:-./models/Zero-To-CAD-Qwen3-VL-2B}
 NUM_CANDIDATES=${NUM_CANDIDATES:-5}
 MAX_TOKENS=${MAX_TOKENS:-1024}
 PY=${PY:-/opt/python/bin/python}
+ENABLE_CHAMFER=${ENABLE_CHAMFER:-0}
+CHAMFER_POINTS=${CHAMFER_POINTS:-4096}
 
 for p in part_001 part_002 part_003 part_004 part_005 part_006 part_007 part_008
 do
@@ -64,6 +66,14 @@ PY
       ${PY} src/select_best_candidate.py \
         --geometry_csv ${OUT}/geometry_eval.csv \
         --out ${OUT}/best_candidate.json || true
+    fi
+
+    if [ "${ENABLE_CHAMFER}" = "1" ]; then
+      ${PY} src/evaluate_chamfer_rocm.py \
+        --gt ./examples/${p}/${p}_gt.stl \
+        --pred-dir ${OUT} \
+        --out ${OUT}/chamfer_eval.csv \
+        --points ${CHAMFER_POINTS} || true
     fi
   fi
 done

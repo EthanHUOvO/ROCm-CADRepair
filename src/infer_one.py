@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
@@ -33,6 +34,7 @@ def main():
     parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--do-sample", action="store_true")
+    parser.add_argument("--profile-label", default=None)
     args = parser.parse_args()
 
     outdir = Path(args.outdir)
@@ -58,6 +60,12 @@ def main():
         )
 
     print("[3/5] Loading model on ROCm GPU...")
+    if not torch.cuda.is_available():
+        raise RuntimeError("No ROCm/CUDA device is visible to PyTorch.")
+
+    device_index = torch.cuda.current_device()
+    device_name = torch.cuda.get_device_name(device_index)
+
     try:
         model = ModelClass.from_pretrained(
             args.model,
@@ -106,6 +114,7 @@ def main():
         return_tensors="pt",
     )
     inputs = {k: v.to("cuda") for k, v in inputs.items()}
+    input_tokens = int(inputs["input_ids"].shape[1])
 
     torch.cuda.reset_peak_memory_stats()
     torch.cuda.synchronize()
@@ -120,11 +129,18 @@ def main():
     if args.do_sample:
         gen_kwargs["temperature"] = args.temperature
 
-    with torch.no_grad():
+    with torch.inference_mode():
         output_ids = model.generate(**inputs, **gen_kwargs)
 
     torch.cuda.synchronize()
     t1 = time.time()
+
+    total_tokens = int(output_ids.shape[1])
+    generated_tokens = max(total_tokens - input_tokens, 0)
+    inference_time_sec = t1 - t0
+    generated_tokens_per_sec = (
+        generated_tokens / inference_time_sec if inference_time_sec > 0 else None
+    )
 
     generated = processor.batch_decode(
         output_ids[:, inputs["input_ids"].shape[1]:],
@@ -135,12 +151,25 @@ def main():
 
     log = {
         "candidate": args.candidate,
+        "profile_label": args.profile_label,
         "max_new_tokens": args.max_new_tokens,
         "do_sample": args.do_sample,
         "temperature": args.temperature,
-        "inference_time_sec": t1 - t0,
+        "inference_time_sec": inference_time_sec,
+        "input_tokens": input_tokens,
+        "generated_tokens": generated_tokens,
+        "generated_tokens_per_sec": generated_tokens_per_sec,
         "peak_vram_gb": torch.cuda.max_memory_allocated() / 1024**3,
-        "gpu_name": torch.cuda.get_device_name(0),
+        "peak_reserved_vram_gb": torch.cuda.max_memory_reserved() / 1024**3,
+        "gpu_name": device_name,
+        "torch_version": torch.__version__,
+        "torch_hip_version": getattr(torch.version, "hip", None),
+        "device_count": torch.cuda.device_count(),
+        "visible_devices": {
+            "ROCR_VISIBLE_DEVICES": os.environ.get("ROCR_VISIBLE_DEVICES"),
+            "HIP_VISIBLE_DEVICES": os.environ.get("HIP_VISIBLE_DEVICES"),
+            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        },
         "output_code": str(code_path),
     }
 
@@ -148,6 +177,7 @@ def main():
 
     print("Generated code:", code_path)
     print("Inference time:", round(log["inference_time_sec"], 2), "sec")
+    print("Generated tokens/sec:", round(log["generated_tokens_per_sec"], 2) if log["generated_tokens_per_sec"] else None)
     print("Peak VRAM:", round(log["peak_vram_gb"], 2), "GB")
 
 
