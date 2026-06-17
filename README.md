@@ -60,6 +60,17 @@ ENABLE_CHAMFER=1 \
 bash scripts/run_8parts_benchmark.sh
 ```
 
+Avoid long CadQuery hangs during verification:
+
+```bash
+CADQUERY_TIMEOUT_SEC=180 \
+MODEL=./models/Zero-To-CAD-Qwen3-VL-2B \
+NUM_CANDIDATES=5 \
+MAX_TOKENS=1024 \
+ENABLE_CHAMFER=1 \
+bash scripts/run_8parts_benchmark.sh
+```
+
 Collect aggregate results:
 
 ```bash
@@ -93,6 +104,7 @@ GPU=0 TOKENS="512 1024 2048" bash scripts/run_token_ablation.sh
 - `outputs/part_*/geometry_eval.csv`: bbox, volume, watertight metrics
 - `outputs/part_*/chamfer_eval.csv`: ROCm/PyTorch Chamfer distance metrics
 - `docs/results/competition_report.md`: paper-ready summary
+- `assistant_reports/*`: local CAD assistant per-part diagnosis reports
 - `profiles/*`: rocprof and rocm-smi artifacts
 
 ## Suggested Paper Positioning

@@ -1,14 +1,34 @@
 import argparse
 import json
+import os
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 PYTHON = "/opt/python/bin/python"
 
 
-def run(cmd):
+def run(cmd, timeout_sec):
     print("RUN:", cmd)
-    subprocess.run(cmd, shell=True)
+    popen_kwargs = {"shell": True}
+    if os.name != "nt":
+        popen_kwargs["start_new_session"] = True
+
+    proc = subprocess.Popen(cmd, **popen_kwargs)
+    try:
+        proc.wait(timeout=timeout_sec)
+        return proc.returncode
+    except subprocess.TimeoutExpired:
+        print(f"Command timed out after {timeout_sec} sec")
+        if os.name == "nt":
+            proc.kill()
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+            time.sleep(2)
+            if proc.poll() is None:
+                os.killpg(proc.pid, signal.SIGKILL)
+        return "TimeoutExpired"
 
 
 def read_json(path):
@@ -18,11 +38,29 @@ def read_json(path):
     return {}
 
 
+def write_timeout_json(path, cid, stage, timeout_sec):
+    data = {
+        "candidate": cid,
+        "success": False,
+        "stage": stage,
+        "error_type": "TimeoutExpired",
+        "error": f"CadQuery execution exceeded {timeout_sec} sec",
+    }
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--code", required=True)
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--candidate", type=int, required=True)
+    parser.add_argument(
+        "--timeout-sec",
+        type=int,
+        default=int(os.environ.get("CADQUERY_TIMEOUT_SEC", "180")),
+        help="Timeout for each CadQuery execution stage.",
+    )
     args = parser.parse_args()
 
     outdir = Path(args.outdir)
@@ -32,14 +70,18 @@ def main():
     safe_log = outdir / f"verify_candidate_{cid}_safe.json"
     final_log = outdir / f"pipeline_candidate_{cid}.json"
 
-    run(
+    raw_status = run(
         f"{PYTHON} src/run_cadquery.py "
         f"--code {args.code} "
         f"--outdir {args.outdir} "
-        f"--candidate {cid}"
+        f"--candidate {cid}",
+        args.timeout_sec,
     )
 
-    raw = read_json(raw_log)
+    if raw_status == "TimeoutExpired" and not raw_log.exists():
+        raw = write_timeout_json(raw_log, cid, "raw", args.timeout_sec)
+    else:
+        raw = read_json(raw_log)
 
     if raw.get("success") is True:
         final = {
@@ -55,15 +97,19 @@ def main():
         print(json.dumps(final, indent=2, ensure_ascii=False))
         return
 
-    run(
+    safe_status = run(
         f"{PYTHON} src/run_cadquery_safe.py "
         f"--code {args.code} "
         f"--outdir {args.outdir} "
         f"--candidate {cid} "
-        f"--safe"
+        f"--safe",
+        args.timeout_sec,
     )
 
-    safe = read_json(safe_log)
+    if safe_status == "TimeoutExpired" and not safe_log.exists():
+        safe = write_timeout_json(safe_log, cid, "safe", args.timeout_sec)
+    else:
+        safe = read_json(safe_log)
 
     final = {
         "candidate": cid,
