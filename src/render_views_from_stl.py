@@ -68,8 +68,18 @@ def axis_limits(points, margin_ratio=0.12):
     return [(center[i] - radius, center[i] + radius) for i in range(3)]
 
 
-def render_views(stl_path, outdir, image_size=512, dpi=100, line_width=0.22):
+def render_views(
+    stl_path,
+    outdir,
+    image_size=512,
+    dpi=100,
+    line_width=0.22,
+    max_faces=None,
+):
     faces = read_stl(stl_path)
+    if max_faces and len(faces) > max_faces:
+        indices = np.linspace(0, len(faces) - 1, max_faces).astype(int)
+        faces = faces[indices]
     points = faces.reshape(-1, 3)
     limits = axis_limits(points)
 
@@ -109,9 +119,16 @@ def main():
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--image-size", type=int, default=512)
     parser.add_argument("--dpi", type=int, default=100)
+    parser.add_argument("--max-faces", type=int, default=None)
     args = parser.parse_args()
 
-    render_views(args.stl, args.outdir, image_size=args.image_size, dpi=args.dpi)
+    render_views(
+        args.stl,
+        args.outdir,
+        image_size=args.image_size,
+        dpi=args.dpi,
+        max_faces=args.max_faces,
+    )
     print("Rendered views:", args.outdir)
 
 

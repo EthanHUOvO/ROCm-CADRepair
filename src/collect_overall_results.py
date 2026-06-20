@@ -1,77 +1,115 @@
+import argparse
+import json
+import re
 from pathlib import Path
+
 import pandas as pd
 
-rows = []
 
-for part_dir in sorted(Path("./outputs").glob("part_*")):
-    p = part_dir.name
-    pipeline = part_dir / "pipeline_summary.csv"
-    geom = part_dir / "geometry_eval.csv"
-    chamfer = part_dir / "chamfer_eval.csv"
+CANDIDATE_RE = re.compile(r"candidate_(\d+)$")
 
-    row = {
-        "sample": p,
-        "candidates": None,
-        "pipeline_success": None,
-        "pipeline_success_rate": None,
-        "raw_selected": None,
-        "safe_selected": None,
-        "failed": None,
-        "best_bbox_mean_error": None,
-        "best_volume_error": None,
-        "best_normalized_chamfer_l2_squared": None,
-    }
 
-    if pipeline.exists():
-        df = pd.read_csv(pipeline)
+def candidate_id(path):
+    match = CANDIDATE_RE.match(Path(str(path)).stem)
+    return int(match.group(1)) if match else None
 
-        row["candidates"] = len(df)
 
-        if "final_success" in df.columns and len(df) > 0:
-            row["pipeline_success"] = int(df["final_success"].sum())
-            row["pipeline_success_rate"] = row["pipeline_success"] / len(df)
+def read_csv(path):
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
 
-        if "selected_stage" in df.columns:
-            row["raw_selected"] = int((df["selected_stage"] == "raw").sum())
-            row["safe_selected"] = int((df["selected_stage"] == "safe").sum())
-            row["failed"] = int((df["selected_stage"] == "failed").sum())
 
-    if geom.exists():
-        g = pd.read_csv(geom)
+def read_json(path):
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
-        if len(g) > 0:
-            if all(c in g.columns for c in ["bbox_x_error", "bbox_y_error", "bbox_z_error"]):
-                g["bbox_mean_error"] = g[["bbox_x_error", "bbox_y_error", "bbox_z_error"]].mean(axis=1)
-            else:
-                g["bbox_mean_error"] = None
 
-            if "watertight" in g.columns:
-                g["watertight_score"] = g["watertight"].apply(lambda x: 0 if bool(x) else 1)
-            else:
-                g["watertight_score"] = 1
+def candidate_row(frame, candidate):
+    if frame.empty or candidate is None:
+        return None
+    frame = frame.copy()
+    if "candidate" not in frame.columns and "candidate_stl" in frame.columns:
+        frame["candidate"] = frame["candidate_stl"].map(candidate_id)
+    match = frame[frame["candidate"] == candidate]
+    return match.iloc[0] if not match.empty else None
 
-            sort_cols = ["watertight_score", "bbox_mean_error"]
-            if "volume_error" in g.columns:
-                sort_cols.append("volume_error")
 
-            best = g.sort_values(sort_cols).iloc[0]
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--outputs-root", default="./outputs")
+    parser.add_argument("--out", default="./docs/results/overall_8parts_summary.csv")
+    args = parser.parse_args()
 
-            row["best_bbox_mean_error"] = best.get("bbox_mean_error")
-            row["best_volume_error"] = best.get("volume_error", None)
+    rows = []
+    for part_dir in sorted(Path(args.outputs_root).glob("part_*")):
+        pipeline = read_csv(part_dir / "pipeline_summary.csv")
+        geometry = read_csv(part_dir / "geometry_eval.csv")
+        chamfer = read_csv(part_dir / "chamfer_eval.csv")
+        visual = read_csv(part_dir / "multiview_eval.csv")
+        best = read_json(part_dir / "best_candidate.json")
+        candidate = best.get("candidate")
+        if candidate is None:
+            candidate = candidate_id(best.get("candidate_stl", ""))
 
-    if chamfer.exists():
-        c = pd.read_csv(chamfer)
-        if len(c) > 0 and "normalized_chamfer_l2_squared" in c.columns:
-            row["best_normalized_chamfer_l2_squared"] = c[
+        row = {
+            "sample": part_dir.name,
+            "candidates": len(pipeline) if not pipeline.empty else None,
+            "pipeline_success": None,
+            "pipeline_success_rate": None,
+            "raw_selected": None,
+            "safe_selected": None,
+            "failed": None,
+            "best_candidate": candidate,
+            "best_bbox_mean_error": None,
+            "best_volume_error": None,
+            "best_normalized_chamfer_l2_squared": None,
+            "best_fscore_02": None,
+            "best_mean_view_iou": None,
+            "best_mean_edge_iou": None,
+            "best_mean_visual_score": None,
+            "metric_integrity": best.get("metric_integrity", "not_verified"),
+        }
+
+        if not pipeline.empty:
+            if "final_success" in pipeline.columns:
+                success = int(pipeline["final_success"].sum())
+                row["pipeline_success"] = success
+                row["pipeline_success_rate"] = success / len(pipeline)
+            if "selected_stage" in pipeline.columns:
+                row["raw_selected"] = int((pipeline["selected_stage"] == "raw").sum())
+                row["safe_selected"] = int((pipeline["selected_stage"] == "safe").sum())
+                row["failed"] = int((pipeline["selected_stage"] == "failed").sum())
+
+        geom_row = candidate_row(geometry, candidate)
+        if geom_row is not None:
+            if "bbox_mean_error" in geom_row:
+                row["best_bbox_mean_error"] = geom_row.get("bbox_mean_error")
+            elif all(col in geom_row for col in ["bbox_x_error", "bbox_y_error", "bbox_z_error"]):
+                row["best_bbox_mean_error"] = geom_row[
+                    ["bbox_x_error", "bbox_y_error", "bbox_z_error"]
+                ].mean()
+            row["best_volume_error"] = geom_row.get("volume_error")
+
+        chamfer_row = candidate_row(chamfer, candidate)
+        if chamfer_row is not None:
+            row["best_normalized_chamfer_l2_squared"] = chamfer_row.get(
                 "normalized_chamfer_l2_squared"
-            ].min()
+            )
+            row["best_fscore_02"] = chamfer_row.get("fscore_02")
 
-    rows.append(row)
+        visual_row = candidate_row(visual, candidate)
+        if visual_row is not None:
+            row["best_mean_view_iou"] = visual_row.get("mean_view_iou")
+            row["best_mean_edge_iou"] = visual_row.get("mean_edge_iou")
+            row["best_mean_visual_score"] = visual_row.get("mean_visual_score")
 
-out = pd.DataFrame(rows)
-print(out)
+        rows.append(row)
 
-Path("./docs/results").mkdir(parents=True, exist_ok=True)
-out.to_csv("./docs/results/overall_8parts_summary.csv", index=False)
+    output = pd.DataFrame(rows)
+    print(output)
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(out_path, index=False)
+    print("Saved:", out_path)
 
-print("Saved: ./docs/results/overall_8parts_summary.csv")
+
+if __name__ == "__main__":
+    main()

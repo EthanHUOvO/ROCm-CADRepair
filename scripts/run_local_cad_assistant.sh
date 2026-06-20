@@ -11,6 +11,8 @@ TEMP_STEP=${TEMP_STEP:-0.1}
 GPU=${GPU:-0}
 ENABLE_CHAMFER=${ENABLE_CHAMFER:-1}
 CHAMFER_POINTS=${CHAMFER_POINTS:-4096}
+ENABLE_VISUAL_EVAL=${ENABLE_VISUAL_EVAL:-1}
+VISUAL_IMAGE_SIZE=${VISUAL_IMAGE_SIZE:-256}
 VIEWS=${VIEWS:-./examples/${PART}/views}
 OUT=${OUT:-./outputs/${PART}}
 REPORT_DIR=${REPORT_DIR:-./assistant_reports}
@@ -82,24 +84,47 @@ if [ -f "${GT_STL}" ]; then
     --pred_dir "${OUT}" \
     --out "${OUT}/geometry_eval.csv" || true
 
-  if [ -f "${OUT}/geometry_eval.csv" ]; then
-    "${PY}" src/select_best_candidate.py \
-      --geometry_csv "${OUT}/geometry_eval.csv" \
-      --out "${OUT}/best_candidate.json" || true
-  fi
-
+  CHAMFER_ARGS=()
   if [ "${ENABLE_CHAMFER}" = "1" ]; then
     "${PY}" src/evaluate_chamfer_rocm.py \
       --gt "${GT_STL}" \
       --pred-dir "${OUT}" \
       --out "${OUT}/chamfer_eval.csv" \
-      --points "${CHAMFER_POINTS}" || true
+      --points "${CHAMFER_POINTS}" \
+      --alignment centroid
+    CHAMFER_ARGS=(--chamfer_csv "${OUT}/chamfer_eval.csv")
+  fi
+
+  VISUAL_ARGS=()
+  if [ "${ENABLE_VISUAL_EVAL}" = "1" ]; then
+    "${PY}" src/evaluate_multiview_similarity.py \
+      --target-views "${VIEWS}" \
+      --pred-dir "${OUT}" \
+      --out "${OUT}/multiview_eval.csv" \
+      --image-size "${VISUAL_IMAGE_SIZE}"
+    VISUAL_ARGS=(--visual_csv "${OUT}/multiview_eval.csv")
+  fi
+
+  if [ -f "${OUT}/geometry_eval.csv" ]; then
+    "${PY}" src/select_best_candidate.py \
+      --geometry_csv "${OUT}/geometry_eval.csv" \
+      "${CHAMFER_ARGS[@]}" \
+      "${VISUAL_ARGS[@]}" \
+      --ranking-out "${OUT}/candidate_ranking.csv" \
+      --out "${OUT}/best_candidate.json"
+
+    "${PY}" src/render_best_candidate_comparison.py \
+      --part-dir "${OUT}" \
+      --target-views "${VIEWS}" \
+      --out "${OUT}/best_candidate_multiview_comparison.png" \
+      --image-size "${VISUAL_IMAGE_SIZE}"
   fi
 fi
 
+OUTPUTS_ROOT=${OUTPUTS_ROOT:-$(dirname "${OUT}")}
 "${PY}" src/generate_assistant_report.py \
   --part "${PART}" \
-  --outputs-root ./outputs \
+  --outputs-root "${OUTPUTS_ROOT}" \
   --outdir "${REPORT_DIR}" \
   --summary-csv "${REPORT_DIR}/assistant_summary.csv"
 

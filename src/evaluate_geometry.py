@@ -1,8 +1,28 @@
 import argparse
+import hashlib
+import re
 from pathlib import Path
 
 import pandas as pd
 import trimesh
+
+
+CANDIDATE_RE = re.compile(r"candidate_(\d+)$")
+
+
+def candidate_id(path):
+    match = CANDIDATE_RE.match(Path(path).stem)
+    if not match:
+        raise ValueError(f"Cannot extract candidate id from: {path}")
+    return int(match.group(1))
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def load_mesh(path):
@@ -42,14 +62,20 @@ def main():
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
-    gt = mesh_stats(Path(args.gt))
+    gt_path = Path(args.gt)
+    gt = mesh_stats(gt_path)
+    gt_sha256 = sha256(gt_path)
     rows = []
 
     for stl in sorted(Path(args.pred_dir).glob("candidate*.stl")):
         pred = mesh_stats(stl)
 
         rows.append({
+            "candidate": candidate_id(stl),
             "candidate_stl": str(stl),
+            "candidate_sha256": sha256(stl),
+            "gt_stl": str(gt_path),
+            "gt_sha256": gt_sha256,
             "vertices": pred["vertices"],
             "faces": pred["faces"],
             "watertight": pred["watertight"],
@@ -68,7 +94,10 @@ def main():
         })
 
     df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values("candidate")
     print(df)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(args.out, index=False)
     print("Saved:", args.out)
 

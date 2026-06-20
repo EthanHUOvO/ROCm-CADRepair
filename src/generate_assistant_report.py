@@ -58,6 +58,18 @@ def find_best_candidate(part_dir):
     return row
 
 
+def find_candidate_row(frame, candidate):
+    if frame.empty or candidate == "n/a":
+        return None
+    frame = frame.copy()
+    if "candidate" not in frame.columns and "candidate_stl" in frame.columns:
+        frame["candidate"] = frame["candidate_stl"].map(
+            lambda value: int(Path(str(value)).stem.split("_")[-1])
+        )
+    match = frame[frame["candidate"] == int(candidate)]
+    return match.iloc[0] if not match.empty else None
+
+
 def build_part_report(part, outputs_root, outdir):
     part_dir = Path(outputs_root) / part
     outdir = Path(outdir)
@@ -66,6 +78,7 @@ def build_part_report(part, outputs_root, outdir):
     pipeline = read_csv(part_dir / "pipeline_summary.csv")
     geometry = read_csv(part_dir / "geometry_eval.csv")
     chamfer = read_csv(part_dir / "chamfer_eval.csv")
+    visual = read_csv(part_dir / "multiview_eval.csv")
     errors = read_csv(part_dir / "error_analysis.csv")
     best = find_best_candidate(part_dir)
 
@@ -91,8 +104,19 @@ def build_part_report(part, outputs_root, outdir):
         bbox_mean = pd.Series([best["bbox_x_error"], best["bbox_y_error"], best["bbox_z_error"]]).mean()
 
     chamfer_value = None
-    if not chamfer.empty and "normalized_chamfer_l2_squared" in chamfer.columns:
-        chamfer_value = chamfer["normalized_chamfer_l2_squared"].min()
+    fscore_02 = None
+    chamfer_row = find_candidate_row(chamfer, best_candidate)
+    if chamfer_row is not None:
+        chamfer_value = chamfer_row.get("normalized_chamfer_l2_squared")
+        fscore_02 = chamfer_row.get("fscore_02")
+    visual_iou = None
+    edge_iou = None
+    visual_score = None
+    visual_row = find_candidate_row(visual, best_candidate)
+    if visual_row is not None:
+        visual_iou = visual_row.get("mean_view_iou")
+        edge_iou = visual_row.get("mean_edge_iou")
+        visual_score = visual_row.get("mean_visual_score")
 
     avg_latency = inference["inference_time_sec"].mean() if "inference_time_sec" in inference else None
     avg_tokens = (
@@ -125,6 +149,11 @@ def build_part_report(part, outputs_root, outdir):
         f"- Mean bbox relative error: {fmt(bbox_mean)}",
         f"- Volume relative error: {fmt(best.get('volume_error'))}",
         f"- Normalized Chamfer distance: {fmt(chamfer_value)}",
+        f"- Surface F-score at 2% diagonal: {fmt(fscore_02)}",
+        f"- Mean eight-view silhouette IoU: {fmt(visual_iou)}",
+        f"- Mean eight-view structural-edge IoU: {fmt(edge_iou)}",
+        f"- Combined multi-view visual score: {fmt(visual_score)}",
+        f"- Metric integrity: {best.get('metric_integrity', 'not verified')}",
         "",
         "## ROCm Inference Evidence",
         "",
@@ -189,6 +218,10 @@ def build_part_report(part, outputs_root, outdir):
         "bbox_mean_error": bbox_mean,
         "volume_error": best.get("volume_error"),
         "normalized_chamfer": chamfer_value,
+        "fscore_02": fscore_02,
+        "mean_view_iou": visual_iou,
+        "mean_edge_iou": edge_iou,
+        "mean_visual_score": visual_score,
         "avg_latency_sec": avg_latency,
         "avg_tokens_per_sec": avg_tokens,
         "peak_vram_gb": peak_vram,

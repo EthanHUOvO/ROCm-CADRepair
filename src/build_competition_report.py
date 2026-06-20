@@ -49,8 +49,27 @@ def main():
             suffixes=("", "_infer"),
         )
 
+    quality_components = []
     if "best_bbox_mean_error" in report.columns:
-        report["geometry_score"] = (1 - report["best_bbox_mean_error"]).clip(lower=0)
+        quality_components.append(
+            ((1 - report["best_bbox_mean_error"]).clip(0, 1), 0.20)
+        )
+    if "best_volume_error" in report.columns:
+        quality_components.append(
+            ((1 - report["best_volume_error"]).clip(0, 1), 0.15)
+        )
+    if "best_normalized_chamfer_l2_squared" in report.columns:
+        chamfer_score = 1 - (report["best_normalized_chamfer_l2_squared"] / 0.05)
+        quality_components.append((chamfer_score.clip(0, 1), 0.25))
+    if "best_mean_visual_score" in report.columns:
+        quality_components.append((report["best_mean_visual_score"].clip(0, 1), 0.20))
+    if "best_mean_edge_iou" in report.columns:
+        quality_components.append((report["best_mean_edge_iou"].clip(0, 1), 0.20))
+
+    if quality_components:
+        numerator = sum(series.fillna(0) * weight for series, weight in quality_components)
+        denominator = sum(series.notna().astype(float) * weight for series, weight in quality_components)
+        report["geometry_score"] = numerator / denominator.mask(denominator == 0)
     else:
         report["geometry_score"] = pd.NA
 
@@ -61,7 +80,7 @@ def main():
 
     if all(c in report.columns for c in ["cad_repair_score", "geometry_score"]):
         report["overall_demo_score"] = (
-            0.6 * report["cad_repair_score"] + 0.4 * report["geometry_score"]
+            0.4 * report["cad_repair_score"] + 0.6 * report["geometry_score"]
         )
 
     out_csv = Path(args.out_csv)
@@ -102,21 +121,22 @@ def main():
         "",
         "## Per-Part Summary",
         "",
-        "| sample | success rate | raw | safe repair | failed | bbox error | volume error | chamfer | avg latency(s) | tokens/s | peak VRAM(GB) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| sample | best | success | bbox | volume | chamfer | view IoU | edge IoU | geometry score | latency(s) | tokens/s | VRAM(GB) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
     for _, row in report.iterrows():
         lines.append(
-            "| {sample} | {success} | {raw} | {safe} | {failed} | {bbox} | {vol} | {chamfer} | {lat} | {tok} | {vram} |".format(
+            "| {sample} | {best} | {success} | {bbox} | {vol} | {chamfer} | {view} | {edge} | {geometry} | {lat} | {tok} | {vram} |".format(
                 sample=row.get("sample", "n/a"),
+                best=int(row.get("best_candidate")) if not pd.isna(row.get("best_candidate", pd.NA)) else "n/a",
                 success=fmt_pct(row.get("pipeline_success_rate", float("nan"))),
-                raw=int(row.get("raw_selected", 0)) if not pd.isna(row.get("raw_selected", pd.NA)) else "n/a",
-                safe=int(row.get("safe_selected", 0)) if not pd.isna(row.get("safe_selected", pd.NA)) else "n/a",
-                failed=int(row.get("failed", 0)) if not pd.isna(row.get("failed", pd.NA)) else "n/a",
                 bbox=fmt_float(row.get("best_bbox_mean_error", float("nan"))),
                 vol=fmt_float(row.get("best_volume_error", float("nan"))),
                 chamfer=fmt_float(row.get("best_normalized_chamfer_l2_squared", float("nan"))),
+                view=fmt_float(row.get("best_mean_view_iou", float("nan"))),
+                edge=fmt_float(row.get("best_mean_edge_iou", float("nan"))),
+                geometry=fmt_float(row.get("geometry_score", float("nan"))),
                 lat=fmt_float(row.get("avg_inference_time_sec", float("nan")), 2),
                 tok=fmt_float(row.get("avg_generated_tokens_per_sec", float("nan")), 2),
                 vram=fmt_float(row.get("avg_peak_vram_gb", float("nan")), 2),
@@ -130,7 +150,7 @@ def main():
             "",
             "- Use latency, tokens/sec and VRAM to support the ROCm performance and resource-analysis section.",
             "- Use raw vs safe repair counts to show the engineering contribution beyond plain model generation.",
-            "- Use bbox, volume error and Chamfer distance to discuss geometric fidelity and failure cases.",
+            "- Use candidate-consistent bbox, volume, Chamfer, view IoU and edge IoU to discuss fidelity and failure cases.",
             "- Add rocprof and rocm-smi screenshots/logs for kernel-level evidence on the AMD test platform.",
             "",
         ]
