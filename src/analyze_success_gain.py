@@ -1,46 +1,42 @@
-import pandas as pd
+import argparse
 from pathlib import Path
 
-df = pd.read_csv("docs/results/overall_8parts_summary.csv")
+import pandas as pd
 
-df["raw_success_rate"] = df["raw_selected"] / df["candidates"]
-df["safe_gain"] = df["safe_selected"] / df["candidates"]
-df["success_gain"] = df["pipeline_success_rate"] - df["raw_success_rate"]
 
-print(df[[
-    "sample",
-    "candidates",
-    "raw_selected",
-    "raw_success_rate",
-    "safe_selected",
-    "pipeline_success",
-    "pipeline_success_rate",
-    "success_gain"
-]])
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default="docs/results/overall_8parts_summary.csv")
+    parser.add_argument("--results-dir", default="docs/results")
+    args = parser.parse_args()
 
-total_candidates = df["candidates"].sum()
-total_raw = df["raw_selected"].sum()
-total_safe = df["safe_selected"].sum()
-total_success = df["pipeline_success"].sum()
-total_failed = df["failed"].sum()
+    frame = pd.read_csv(args.input)
+    frame["raw_success_rate"] = frame["raw_selected"] / frame["candidates"]
+    frame["safe_gain"] = frame["safe_selected"] / frame["candidates"]
+    frame["success_gain"] = frame["pipeline_success_rate"] - frame["raw_success_rate"]
 
-summary = {
-    "total_candidates": total_candidates,
-    "total_raw_success": total_raw,
-    "total_safe_success": total_safe,
-    "total_pipeline_success": total_success,
-    "total_failed": total_failed,
-    "raw_success_rate": total_raw / total_candidates,
-    "pipeline_success_rate": total_success / total_candidates,
-    "absolute_gain": total_success / total_candidates - total_raw / total_candidates,
-}
+    total_candidates = frame["candidates"].sum()
+    total_raw = frame["raw_selected"].sum()
+    total_safe = frame["safe_selected"].sum()
+    total_success = frame["pipeline_success"].sum()
+    total_failed = frame["failed"].sum()
+    summary = {
+        "total_candidates": total_candidates,
+        "total_raw_success": total_raw,
+        "total_safe_success": total_safe,
+        "total_pipeline_success": total_success,
+        "total_failed": total_failed,
+        "raw_success_rate": total_raw / total_candidates,
+        "pipeline_success_rate": total_success / total_candidates,
+        "absolute_gain": total_success / total_candidates - total_raw / total_candidates,
+    }
 
-print("\nOverall:")
-for k, v in summary.items():
-    print(k, v)
+    results_dir = Path(args.results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(results_dir / "success_gain_analysis.csv", index=False)
+    pd.DataFrame([summary]).to_csv(results_dir / "overall_success_summary.csv", index=False)
+    print(pd.DataFrame([summary]))
 
-Path("docs/results").mkdir(parents=True, exist_ok=True)
-df.to_csv("docs/results/success_gain_analysis.csv", index=False)
-pd.DataFrame([summary]).to_csv("docs/results/overall_success_summary.csv", index=False)
-print("\nSaved: docs/results/success_gain_analysis.csv")
-print("Saved: docs/results/overall_success_summary.csv")
+
+if __name__ == "__main__":
+    main()

@@ -53,12 +53,21 @@ bash scripts/run_8parts_benchmark.sh
 Run the benchmark with ROCm Chamfer geometry evaluation:
 
 ```bash
+RUN_ID=final_v2 \
 MODEL=./models/Zero-To-CAD-Qwen3-VL-2B \
 NUM_CANDIDATES=5 \
 MAX_TOKENS=1024 \
 ENABLE_CHAMFER=1 \
+CHAMFER_POINTS=8192 \
+ENABLE_VISUAL_EVAL=1 \
 bash scripts/run_8parts_benchmark.sh
 ```
+
+Each `RUN_ID` writes to an isolated `runs/<RUN_ID>/` directory. Do not reuse a
+run ID: mixing candidate files and CSV summaries from different runs invalidates
+the geometry comparison. The corrected selector joins BBox, volume, Chamfer and
+surface F-score by candidate ID and verifies STL/ground-truth hashes before a
+best candidate is reported.
 
 Avoid long CadQuery hangs during verification:
 
@@ -96,15 +105,18 @@ GPU=0 TOKENS="512 1024 2048" bash scripts/run_token_ablation.sh
 
 ## Important Outputs
 
-- `outputs/part_*/candidate_*.py`: generated CadQuery programs
-- `outputs/part_*/candidate_*.step`: generated STEP files
-- `outputs/part_*/candidate_*.stl`: generated STL files
-- `outputs/part_*/infer_candidate_*.json`: ROCm inference metrics
-- `outputs/part_*/pipeline_summary.csv`: raw/safe/fail status
-- `outputs/part_*/geometry_eval.csv`: bbox, volume, watertight metrics
-- `outputs/part_*/chamfer_eval.csv`: ROCm/PyTorch Chamfer distance metrics
-- `docs/results/competition_report.md`: paper-ready summary
-- `assistant_reports/*`: local CAD assistant per-part diagnosis reports
+- `runs/<RUN_ID>/run_manifest.json`: immutable run parameters and Git commit
+- `runs/<RUN_ID>/outputs/part_*/candidate_*.py`: generated CadQuery programs
+- `runs/<RUN_ID>/outputs/part_*/candidate_*.step`: generated STEP files
+- `runs/<RUN_ID>/outputs/part_*/candidate_*.stl`: generated STL files
+- `runs/<RUN_ID>/outputs/part_*/pipeline_summary.csv`: raw/safe/fail status
+- `runs/<RUN_ID>/outputs/part_*/geometry_eval.csv`: candidate-specific geometry metrics and hashes
+- `runs/<RUN_ID>/outputs/part_*/chamfer_eval.csv`: candidate-specific Chamfer and F-score metrics
+- `runs/<RUN_ID>/outputs/part_*/multiview_eval.csv`: candidate-specific eight-view silhouette IoU
+- `runs/<RUN_ID>/outputs/part_*/candidate_ranking.csv`: auditable candidate ranking
+- `runs/<RUN_ID>/outputs/part_*/best_candidate_multiview_comparison.png`: visual target/selected audit
+- `runs/<RUN_ID>/docs/results/overall_8parts_summary.csv`: corrected aggregate summary
+- `runs/<RUN_ID>/assistant_reports/*`: candidate-consistent diagnosis reports
 - `profiles/*`: rocprof and rocm-smi artifacts
 
 ## Suggested Paper Positioning
